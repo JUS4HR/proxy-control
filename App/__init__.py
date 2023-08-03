@@ -460,7 +460,7 @@ def updateTrayActions() -> None:
     TRAY_MENU.addAction(Action("设置", CONFIG_MENU, triggered=showConfigWindow))
     TRAY_MENU.addMenu(CONFIG_MENU)
     if not _m.active():
-        TRAY_MENU.addAction(Action("映射配置", TRAY_MENU, triggered=_m.applyMapping))
+        TRAY_MENU.addAction(Action("映射配置", TRAY_MENU, triggered=lambda: _m.applyMapping(force=True)))
     TRAY_MENU.addSeparator()
     for text, callback in BOTTOM_ACTIONS:
         TRAY_MENU.addAction(Action(text, TRAY_MENU, triggered=callback))

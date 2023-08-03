@@ -46,10 +46,10 @@ def applyMapping(force: bool = False) -> None:
         if confName is not None and confName in _c.proxyConfig:
             _c.proxyConfig[confName].apply()
             _p.setEnabled(True)
-            # _t.toast("配置映射", f"根据网络 [{_lastSSID or '有线连接'}]，使用配置 [{confName}]")
+            _t.toast(f"根据网络 [{_lastSSID or '有线连接'}]，使用配置 [{confName}]")
             return
         _p.setEnabled(False)
-        # _t.toast("配置映射", f"根据网络 [{_lastSSID or '有线连接'}]，已禁用代理")
+        _t.toast(f"根据网络 [{_lastSSID or '有线连接'}]，已禁用代理")
 
 
 def _checkMapping() -> None:
