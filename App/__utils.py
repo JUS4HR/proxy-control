@@ -34,7 +34,7 @@ else:
 def isConnected() -> bool:
     import socket
     try:
-        socket.create_connection(("example.com", 80)).close()
+        socket.create_connection(("8.8.8.8", 53), timeout=1).close()
         return True
     except OSError:
         pass

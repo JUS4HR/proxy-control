@@ -265,12 +265,6 @@ class OptionsPage(QWidget):
         self.autoSelectBtn = QCheckBox("根据当前网络自动选择配置")
         self.autoSelectBtn.clicked.connect(self.switchAutoSelect)
         self.rootLayout.addWidget(self.autoSelectBtn)
-        self.autoSelectDuration = QLineEdit()
-        self.autoSelectDuration.setValidator(QIntValidator(1, 60 * 60, self))
-        self.autoSelectDuration.setFixedWidth(50)
-        self.autoSelectDuration.setPlaceholderText(str(_m.NETWORK_CHECK_INTERVAL_DEFAULT))
-        self.autoSelectDuration.textChanged.connect(self.updateAutoSelectDuration)
-        self.rootLayout.addWidget(self.autoSelectDuration)
         self.autoSelectHint = QLabel("此功能现可能占用系统资源。若禁用此项，可在托盘菜单中手动映射")
         self.autoSelectHint.setWordWrap(True)
         self.rootLayout.addWidget(self.autoSelectHint)
@@ -286,16 +280,12 @@ class OptionsPage(QWidget):
         self.startupEnabled = _u.check_startup()
         self.startupBtn.setChecked(self.startupEnabled)
         self.autoSelectBtn.setChecked(_m.active())
-        self.autoSelectDuration.setText(str(_m.getCheckInterval()))
 
     def switchAutoSelect(self) -> None:
         if self.autoSelectBtn.isChecked():
             _m.start()
         else:
             _m.stop()
-
-    def updateAutoSelectDuration(self, text: str) -> None:
-        _m.setCheckInterval(int(text) if text else _m.NETWORK_CHECK_INTERVAL_DEFAULT)
 
 
 # config edit window
