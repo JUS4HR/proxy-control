@@ -4,9 +4,26 @@ from typing import Callable
 import qdarktheme
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QIcon, QIntValidator
-from PyQt5.QtWidgets import (QAction, QApplication, QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                             QListWidget, QMainWindow, QMenu, QMessageBox, QPushButton, QSystemTrayIcon, QTabWidget,
-                             QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (
+    QAction,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSystemTrayIcon,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from . import __config as _c
 from . import __dark as _d
@@ -16,8 +33,8 @@ from . import __mapping as _m
 from . import __proxy as _p
 from . import __utils as _u
 
-MAPPING_UNSET_KW = '断开'
-MAPPING_SSID_WIRED_KW = '有线网络'
+MAPPING_UNSET_KW = "断开"
+MAPPING_SSID_WIRED_KW = "有线网络"
 
 
 def stop() -> None:
@@ -28,7 +45,7 @@ def stop() -> None:
 
 
 def openMSSettings() -> None:
-    os.system('start ms-settings:network-proxy')
+    os.system("start ms-settings:network-proxy")
 
 
 ### app
@@ -60,7 +77,7 @@ class ConfigWindow(QMainWindow):
         self.tabs.currentChanged.connect(self.onCurrentChanged)
 
         self.setFixedSize(330, 260)
-        self.setWindowFlag(getattr(Qt, 'WindowContextHelpButtonHint'), False)
+        self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
 
         self.pageUpdates[self.tabs.currentIndex()]()
 
@@ -87,7 +104,7 @@ class ConfigPage(QWidget):
         self.rootLayout.addWidget(self.list)
         # right buttons
         self.buttons = QVBoxLayout()
-        self.buttons.setAlignment(getattr(Qt, 'AlignTop'))
+        self.buttons.setAlignment(getattr(Qt, "AlignTop"))
         self.rootLayout.addLayout(self.buttons)
         self.appendBtn = QPushButton("添加")
         self.appendBtn.clicked.connect(self.newConfig)
@@ -110,7 +127,9 @@ class ConfigPage(QWidget):
     def newConfig(self) -> None:
         editWindow = ConfigEditWindow(title="新配置")
         editWindow.accepted.connect(self.updateList)
-        editWindow.move(self.mapToGlobal(self.rect().center() - editWindow.rect().center()))
+        editWindow.move(
+            self.mapToGlobal(self.rect().center() - editWindow.rect().center())
+        )
         editWindow.exec_()
         self.editWindow = editWindow  # store a reference to prevent garbage collection
 
@@ -119,9 +138,13 @@ class ConfigPage(QWidget):
             _l.warning("No config selected")
             return
         selectedKey = self.list.selectedIndexes()[0].data()
-        editWindow = ConfigEditWindow(title="编辑配置", name=selectedKey, config=_c.proxyConfig[selectedKey])
+        editWindow = ConfigEditWindow(
+            title="编辑配置", name=selectedKey, config=_c.proxyConfig[selectedKey]
+        )
         editWindow.accepted.connect(self.updateList)
-        editWindow.move(self.mapToGlobal(self.rect().center() - editWindow.rect().center()))
+        editWindow.move(
+            self.mapToGlobal(self.rect().center() - editWindow.rect().center())
+        )
         editWindow.exec_()
         self.editWindow = editWindow  # store a reference to prevent garbage collection
 
@@ -130,7 +153,9 @@ class ConfigPage(QWidget):
         if not selected_indexes:
             _l.warning("No config selected")
             return
-        confirm = QMessageBox.question(self, "确认", "确定要删除所选配置吗？", QMessageBox.Yes | QMessageBox.No)
+        confirm = QMessageBox.question(
+            self, "确认", "确定要删除所选配置吗？", QMessageBox.Yes | QMessageBox.No
+        )
         if confirm == QMessageBox.Yes:
             for i in selected_indexes:
                 item = i.data()
@@ -151,24 +176,24 @@ class MappingPage(QWidget):
         self.setLayout(self.rootLayout)
 
         self.tableLayout = QHBoxLayout()
-        self.tableLayout.setAlignment(getattr(Qt, 'AlignCenter'))
+        self.tableLayout.setAlignment(getattr(Qt, "AlignCenter"))
         self.rootLayout.addLayout(self.tableLayout)
 
         self.ssidLayout = QVBoxLayout()
-        self.ssidLayout.setAlignment(getattr(Qt, 'AlignTop'))
+        self.ssidLayout.setAlignment(getattr(Qt, "AlignTop"))
         self.ssidLabel = QLabel("网络")
         self.ssidLayout.addWidget(self.ssidLabel)
         self.ssidList = QListWidget(self)
         self.ssidList.setFixedWidth(150)
         self.ssidList.currentRowChanged.connect(self.onSelSsid)
         self.ssidList.verticalScrollBar().valueChanged.connect(self.onScrollSsid)
-        self.ssidList.setVerticalScrollBarPolicy(getattr(Qt, 'ScrollBarAlwaysOff'))
+        self.ssidList.setVerticalScrollBarPolicy(getattr(Qt, "ScrollBarAlwaysOff"))
         self.ssidList.itemDoubleClicked.connect(self.editMapping)
         self.ssidLayout.addWidget(self.ssidList)
         self.tableLayout.addLayout(self.ssidLayout)
 
         self.configLayout = QVBoxLayout()
-        self.configLayout.setAlignment(getattr(Qt, 'AlignTop'))
+        self.configLayout.setAlignment(getattr(Qt, "AlignTop"))
         self.configLabel = QLabel("配置")
         self.configLayout.addWidget(self.configLabel)
         self.configList = QListWidget(self)
@@ -180,7 +205,7 @@ class MappingPage(QWidget):
         self.tableLayout.addLayout(self.configLayout)
 
         self.buttonsLayout = QHBoxLayout()
-        self.buttonsLayout.setAlignment(getattr(Qt, 'AlignCenter'))
+        self.buttonsLayout.setAlignment(getattr(Qt, "AlignCenter"))
         self.rootLayout.addLayout(self.buttonsLayout)
         self.appendBtn = QPushButton("添加")
         self.appendBtn.clicked.connect(self.newMapping)
@@ -219,7 +244,9 @@ class MappingPage(QWidget):
     def newMapping(self) -> None:
         editWindow = MappingEditWindow(new=True)
         editWindow.accepted.connect(self.updateTable)
-        editWindow.move(self.mapToGlobal(self.rect().center() - editWindow.rect().center()))
+        editWindow.move(
+            self.mapToGlobal(self.rect().center() - editWindow.rect().center())
+        )
         editWindow.exec_()
         self.editWindow = editWindow
 
@@ -232,7 +259,9 @@ class MappingPage(QWidget):
             config = None
         editWindow = MappingEditWindow(new=False, oldSsid=ssid, oldConfig=config)
         editWindow.accepted.connect(self.updateTable)
-        editWindow.move(self.mapToGlobal(self.rect().center() - editWindow.rect().center()))
+        editWindow.move(
+            self.mapToGlobal(self.rect().center() - editWindow.rect().center())
+        )
         editWindow.exec_()
         self.editWindow = editWindow
 
@@ -241,7 +270,9 @@ class MappingPage(QWidget):
         if not selIndexes:
             _l.warning("No mapping selected")
             return
-        confirm = QMessageBox.question(self, "确认", "确定要删除所选映射吗？", QMessageBox.Yes | QMessageBox.No)
+        confirm = QMessageBox.question(
+            self, "确认", "确定要删除所选映射吗？", QMessageBox.Yes | QMessageBox.No
+        )
         if confirm == QMessageBox.Yes:
             for i in selIndexes:
                 item = i.data()
@@ -257,7 +288,7 @@ class OptionsPage(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rootLayout = QVBoxLayout(self)
-        self.rootLayout.setAlignment(getattr(Qt, 'AlignTop'))
+        self.rootLayout.setAlignment(getattr(Qt, "AlignTop"))
         self.setLayout(self.rootLayout)
         self.startupBtn = QCheckBox("开机启动")
         self.startupBtn.clicked.connect(self.switchStartup)
@@ -290,12 +321,23 @@ class OptionsPage(QWidget):
 
 # config edit window
 class ConfigEditWindow(QDialog):
-    def __init__(self, title: str, name: str = "新配置", config: _p.ProxyConfig | None = None, *args, **kwargs):
+    def __init__(
+        self,
+        title: str,
+        name: str = "新配置",
+        config: _p.ProxyConfig | None = None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.setWindowTitle(title)
         self.new = config is None
         self.oldName = name
-        self.config = config or _p.getCurrentProxy() or _p.ProxyConfig(_p.PROXY_ALLOWED_PROTOS[0], "", 80)
+        self.config = (
+            config
+            or _p.getCurrentProxy()
+            or _p.ProxyConfig(_p.PROXY_ALLOWED_PROTOS[0], "", 80)
+        )
         self.rootLayout = QVBoxLayout(self)
         self.setLayout(self.rootLayout)
         self.form = QFormLayout()
@@ -317,7 +359,7 @@ class ConfigEditWindow(QDialog):
         # self.auth = QCheckBox()
         # self.form.addRow("认证", self.auth)
         self.btnLayout = QHBoxLayout()
-        self.btnLayout.setAlignment(getattr(Qt, 'AlignRight'))
+        self.btnLayout.setAlignment(getattr(Qt, "AlignRight"))
         self.rootLayout.addLayout(self.btnLayout)
         self.saveBtn = QPushButton("保存")
         self.saveBtn.clicked.connect(self.apply)
@@ -334,14 +376,16 @@ class ConfigEditWindow(QDialog):
         # self.password.setText(self.config.password)
         # self.auth.setChecked(self.config.auth)
 
-        self.setWindowFlag(getattr(Qt, 'WindowContextHelpButtonHint'), False)
+        self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
         self.setFixedSize(QSize(250, 150))
 
     def apply(self) -> None:
         if not _c.checkConfigName(self.name.text()):
             QMessageBox.warning(self, "错误", "名称不可用")
             return
-        elif self.name.text() in _c.proxyConfig and (self.name.text() != self.oldName or self.new):
+        elif self.name.text() in _c.proxyConfig and (
+            self.name.text() != self.oldName or self.new
+        ):
             QMessageBox.warning(self, "错误", "名称已存在")
             return
         self.config.proto = self.proto.currentText()
@@ -359,7 +403,14 @@ class ConfigEditWindow(QDialog):
 
 # mapping edit window
 class MappingEditWindow(QDialog):
-    def __init__(self, new: bool = False, oldSsid: str | None = None, oldConfig: str | None = None, *args, **kwargs):
+    def __init__(
+        self,
+        new: bool = False,
+        oldSsid: str | None = None,
+        oldConfig: str | None = None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.new = new
         self.setWindowTitle("新映射" if new else "编辑映射")
@@ -383,7 +434,7 @@ class MappingEditWindow(QDialog):
         self.config.setCurrentText(self.oldConfig or MAPPING_UNSET_KW)
         self.form.addRow("配置", self.config)
         self.btnLayout = QHBoxLayout()
-        self.btnLayout.setAlignment(getattr(Qt, 'AlignRight'))
+        self.btnLayout.setAlignment(getattr(Qt, "AlignRight"))
         self.rootLayout.addLayout(self.btnLayout)
         self.saveBtn = QPushButton("保存")
         self.saveBtn.clicked.connect(self.apply)
@@ -393,7 +444,7 @@ class MappingEditWindow(QDialog):
         self.btnLayout.addWidget(self.cancelBtn)
         self.config.setCurrentText(oldConfig or "")
 
-        self.setWindowFlag(getattr(Qt, 'WindowContextHelpButtonHint'), False)
+        self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
         self.setFixedSize(QSize(250, 120))
 
     def apply(self) -> None:
@@ -418,14 +469,16 @@ class TrayIcon(QSystemTrayIcon):
 
 @_deb.debounce(200)
 def getTBDescription() -> str:
-    return '\n'.join([
-        "代理切换器",
-        f"状态: " + ('\u2713' if lastEnabled else '\u2717'),
-        f"配置: {lastConfigKey}",
-        f"协议: {lastProto}",
-        f"主机: {lastHost}",
-        f"端口: {lastPort}",
-    ])
+    return "\n".join(
+        [
+            "代理切换器",
+            f"状态: " + ("\u2713" if lastEnabled else "\u2717"),
+            f"配置: {lastConfigKey}",
+            f"协议: {lastProto}",
+            f"主机: {lastHost}",
+            f"端口: {lastPort}",
+        ]
+    )
 
 
 def handleTrayClick(reason: QSystemTrayIcon.ActivationReason) -> None:
@@ -450,7 +503,9 @@ def updateTrayActions() -> None:
     TRAY_MENU.addAction(Action("设置", CONFIG_MENU, triggered=showConfigWindow))
     TRAY_MENU.addMenu(CONFIG_MENU)
     if not _m.active():
-        TRAY_MENU.addAction(Action("映射配置", TRAY_MENU, triggered=lambda: _m.applyMapping(force=True)))
+        TRAY_MENU.addAction(
+            Action("映射配置", TRAY_MENU, triggered=lambda: _m.applyMapping(force=True))
+        )
     TRAY_MENU.addSeparator()
     for text, callback in BOTTOM_ACTIONS:
         TRAY_MENU.addAction(Action(text, TRAY_MENU, triggered=callback))
@@ -474,15 +529,21 @@ def showConfigWindow() -> None:
     # Move config window to near the tray icon
     config_window_size = CONFIG_WINDOW.size()
     tray_geometry = TRAY_ICON.geometry()
-    config_window_x = tray_geometry.x() + tray_geometry.width() / 2 - config_window_size.width() / 2
-    config_window_y = tray_geometry.y() + tray_geometry.height() / 2 - config_window_size.height() / 2
+    config_window_x = (
+        tray_geometry.x() + tray_geometry.width() / 2 - config_window_size.width() / 2
+    )
+    config_window_y = (
+        tray_geometry.y() + tray_geometry.height() / 2 - config_window_size.height() / 2
+    )
     screen_geometry = QApplication.desktop().availableGeometry(CONFIG_WINDOW)
-    config_window_x = min(max(config_window_x,
-                              screen_geometry.left() + 50),
-                          screen_geometry.right() - config_window_size.width() - 50)
-    config_window_y = min(max(config_window_y,
-                              screen_geometry.top() + 50),
-                          screen_geometry.bottom() - config_window_size.height() - 50)
+    config_window_x = min(
+        max(config_window_x, screen_geometry.left() + 50),
+        screen_geometry.right() - config_window_size.width() - 50,
+    )
+    config_window_y = min(
+        max(config_window_y, screen_geometry.top() + 50),
+        screen_geometry.bottom() - config_window_size.height() - 50,
+    )
     CONFIG_WINDOW.move(int(config_window_x), int(config_window_y))
     CONFIG_WINDOW.show()
 
@@ -582,11 +643,11 @@ qdarktheme.setup_theme("auto")
 
 # static actions
 TOP_ACTIONS: list[tuple[str, Callable]] = [
-    ('切换 (双击图标)', lambda: _p.setEnabled(not lastEnabled)),
-    ('打开系统设置', openMSSettings),
+    ("切换 (双击图标)", lambda: _p.setEnabled(not lastEnabled)),
+    ("打开系统设置", openMSSettings),
 ]
 BOTTOM_ACTIONS: list[tuple[str, Callable]] = [
-    ('关闭', stop),
+    ("关闭", stop),
 ]
 
 # config window

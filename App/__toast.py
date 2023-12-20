@@ -1,4 +1,5 @@
-from windows_toasts import WindowsToaster, ToastText1, ToastDuration
+from windows_toasts import ToastDuration, ToastText1, WindowsToaster
+
 from . import __utils as _u
 
 

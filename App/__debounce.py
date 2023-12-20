@@ -16,6 +16,7 @@ def debounce(delay: int) -> Callable:
     Returns:
         Callable: Decorator function.
     """
+
     def decorator(function: Callable) -> Callable:
         calls = 0
 
