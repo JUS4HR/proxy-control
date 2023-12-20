@@ -18,7 +18,7 @@ PROXY_ENABLED_ENTRY = "ProxyEnable"
 PROXY_SERVER_ENTRY = "ProxyServer"
 PROXY_OVERRIDE_ENTRY = "ProxyOverride"
 
-PROXY_URL_REGEX = r'^(?P<protocol>http|https|socks4|socks5)://(?P<host>[^:]+):(?P<port>\d+)$'
+PROXY_URL_REGEX = r'^(?:(?P<protocol>http|https|socks4|socks5)://)?(?P<host>[^:/]+)(?::(?P<port>\d+))?$'
 
 if platform.system() == 'Windows':
     PROXY_ALLOWED_PROTOS = ['http', 'https', 'socks4', 'socks5']
