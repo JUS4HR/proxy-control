@@ -1,0 +1,4 @@
+PyQt5
+pyqtdarktheme
+windows-toasts
+pyinstaller

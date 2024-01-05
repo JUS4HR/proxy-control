@@ -45,5 +45,6 @@ exe = EXE(pyz,
           upx_exclude=[],
           upx_include=[],
           runtime_tmpdir=None,
-          console=False,
+          console=True,
+          hide_console='hide-early',
           icon='App\\assets\\di.ico' )

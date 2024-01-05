@@ -1,11 +1,10 @@
 import os
 import sys
 import threading
-import winreg
+from . import __reg as reg
 from typing import Callable
 
 import __main__
-import win32api
 
 from . import __log as _l
 from . import __utils as _u
@@ -30,19 +29,17 @@ def _monitor_registry_changes() -> None:
     _l.info(f"started theme watcher")
     if _key is None:
         return
-    lastWindow: bool = winreg.QueryValueEx(_key, WINDOW_THEME_ENTRY)[0] == 1
-    lastTaskbar: bool = winreg.QueryValueEx(_key, TASKBAR_THEME_ENTRY)[0] == 1
+    lastWindow: bool = _key.queryValue(WINDOW_THEME_ENTRY)[1] == 1
+    lastTaskbar: bool = _key.queryValue(TASKBAR_THEME_ENTRY)[1] == 1
     while True:
         if _key is None:
             return
-        win32api.RegNotifyChangeKeyValue(
-            _key, False, winreg.REG_NOTIFY_CHANGE_LAST_SET, None, False
-        )
+        _key.notifyChange()
         if _key is None:
             return
         _l.debug(f"theme registry changed")
-        window: bool = winreg.QueryValueEx(_key, WINDOW_THEME_ENTRY)[0] == 1
-        taskbar: bool = winreg.QueryValueEx(_key, TASKBAR_THEME_ENTRY)[0] == 1
+        window: bool = _key.queryValue(WINDOW_THEME_ENTRY)[1] == 1
+        taskbar: bool = _key.queryValue(TASKBAR_THEME_ENTRY)[1] == 1
         if window != lastWindow:
             lastWindow = window
             _l.debug(f"window theme changed to {window}")
@@ -54,17 +51,21 @@ def _monitor_registry_changes() -> None:
 
 
 def isTBLight() -> bool:
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_ENTRY, 0, winreg.KEY_READ)
-    light = winreg.QueryValueEx(key, TASKBAR_THEME_ENTRY)[0]
-    winreg.CloseKey(key)
-    return light == 1
+    with reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        THEME_ENTRY,
+        reg.RegKeyAccess.KEY_READ,
+    ) as key:
+        return key.queryValue(TASKBAR_THEME_ENTRY)[1] == 1
 
 
 def isWindowLight() -> bool:
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_ENTRY, 0, winreg.KEY_READ)
-    light = winreg.QueryValueEx(key, WINDOW_THEME_ENTRY)[0]
-    winreg.CloseKey(key)
-    return light == 1
+    with reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        THEME_ENTRY,
+        reg.RegKeyAccess.KEY_READ,
+    ) as key:
+        return key.queryValue(WINDOW_THEME_ENTRY)[1] == 1
 
 
 def getTBIconPath(intact: bool, light: bool | None = None) -> str:
@@ -81,9 +82,12 @@ def getTBIconPath(intact: bool, light: bool | None = None) -> str:
 def start() -> None:
     global _thread, _key
     _l.info("starting theme watcher...")
-    _key = winreg.OpenKey(
-        winreg.HKEY_CURRENT_USER, THEME_ENTRY, 0, winreg.KEY_NOTIFY | winreg.KEY_READ
+    _key = reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        THEME_ENTRY,
+        reg.RegKeyAccess.KEY_NOTIFY | reg.RegKeyAccess.KEY_READ,
     )
+    _key.open()
     _thread = threading.Thread(target=_monitor_registry_changes)
     _thread.daemon = True
     _thread.start()
@@ -93,14 +97,14 @@ def stop() -> None:
     global _key
     _l.info("stopping theme watcher...")
     if _key is not None:
-        winreg.CloseKey(_key)
+        _key.close()
         _key = None
     if _thread:
         _thread.join()
     _l.info("stopped theme watcher.")
 
 
-_key: winreg.HKEYType | None = None
+_key: reg.RegKey | None = None
 _thread: threading.Thread | None = None
 windowCallback: ThemeWatcherCallbackType = lambda _: None
 taskbarCallback: ThemeWatcherCallbackType = lambda _: None

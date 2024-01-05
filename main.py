@@ -1,7 +1,6 @@
 import os
 import sys
 import traceback
-from tkinter import messagebox
 
 import __main__
 
@@ -21,4 +20,3 @@ except Exception as e:
     fatalStr = f"{e}\n{traceback.format_exc()}"
     with open(FATAL_LOG, "w") as f:
         f.write(fatalStr)
-    messagebox.showerror("Error", f"An error occurred: {e}")

@@ -1,16 +1,15 @@
+import sys
+
+if sys.platform != "win32":
+    raise NotImplementedError("Wrong platform for this module")
 import locale
 import os
-import platform
 import subprocess
 import sys
 
-if platform.system() == "Windows":
-    import winreg
-
-import os
-import sys
-
 import __main__
+
+from . import __reg as reg
 
 STARTUP_REG_ENTRY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 APP_NAME = "Proxy Control"
@@ -29,7 +28,7 @@ else:
         START_COMMAND = f"conda activate {os.environ['CONDA_DEFAULT_ENV']} && python {os.path.abspath(__main__.__file__)}"
     else:
         START_COMMAND = f"python {os.path.abspath(__main__.__file__)}"
-    if platform.system() == "Windows":  # run with powershell
+    if sys.platform == "win32":
         START_COMMAND = f'powershell -Command "{START_COMMAND}"'
 
 
@@ -60,12 +59,13 @@ def getSSID() -> str | None:
 
 
 def enable_startup():
-    if platform.system() == "Windows":
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, STARTUP_REG_ENTRY, 0, winreg.KEY_WRITE
-        )
-        winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, START_COMMAND)
-        winreg.CloseKey(key)
+    if sys.platform == "win32":
+        with reg.RegKey(
+            reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+            STARTUP_REG_ENTRY,
+            reg.RegKeyAccess.KEY_WRITE,
+        ) as key:
+            key.setValue(APP_NAME, START_COMMAND, reg.RegValueType.REG_SZ)
     elif platform.system() == "Linux":
         home = os.path.expanduser("~")
         autostart_dir = os.path.join(home, ".config", "autostart")
@@ -85,13 +85,17 @@ def enable_startup():
 
 
 def disable_startup():
-    if platform.system() == "Windows":
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, STARTUP_REG_ENTRY, 0, winreg.KEY_WRITE
-        )
-        winreg.DeleteValue(key, APP_NAME)
-        winreg.CloseKey(key)
-    elif platform.system() == "Linux":
+    if sys.platform == "win32":
+        with reg.RegKey(
+            reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+            STARTUP_REG_ENTRY,
+            reg.RegKeyAccess.KEY_WRITE,
+        ) as key:
+            try:
+                key.deleteValue(APP_NAME)
+            except WindowsError:
+                pass
+    elif sys.platform == "linux":
         home = os.path.expanduser("~")
         autostart_dir = os.path.join(home, ".config", "autostart")
         if os.path.exists(os.path.join(autostart_dir, "myapp.desktop")):
@@ -101,16 +105,18 @@ def disable_startup():
 
 
 def check_startup() -> bool:
-    if platform.system() == "Windows":
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, STARTUP_REG_ENTRY, 0, winreg.KEY_READ
-        )
-        try:
-            value, _ = winreg.QueryValueEx(key, APP_NAME)
-            return value == START_COMMAND
-        except WindowsError:
-            return False
-    elif platform.system() == "Linux":
+    if sys.platform == "win32":
+        with reg.RegKey(
+            reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+            STARTUP_REG_ENTRY,
+            reg.RegKeyAccess.KEY_READ,
+        ) as key:
+            try:
+                value = key.queryValue(APP_NAME)[1]
+                return value == START_COMMAND
+            except WindowsError:
+                return False
+    elif sys.platform == "linux":
         home = os.path.expanduser("~")
         autostart_dir = os.path.join(home, ".config", "autostart")
         if os.path.exists(os.path.join(autostart_dir, "myapp.desktop")):

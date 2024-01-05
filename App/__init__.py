@@ -1,7 +1,7 @@
 import os
 from typing import Callable
 
-import qdarktheme
+import qdarktheme  # type: ignore
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QIcon, QIntValidator
 from PyQt5.QtWidgets import (
@@ -535,7 +535,11 @@ def showConfigWindow() -> None:
     config_window_y = (
         tray_geometry.y() + tray_geometry.height() / 2 - config_window_size.height() / 2
     )
-    screen_geometry = QApplication.desktop().availableGeometry(CONFIG_WINDOW)
+    desktop = QApplication.desktop()
+    screen_geometry = desktop.availableGeometry(CONFIG_WINDOW) if desktop else None
+    if not screen_geometry:
+        _l.warning("Cannot get screen geometry")
+        return
     config_window_x = min(
         max(config_window_x, screen_geometry.left() + 50),
         screen_geometry.right() - config_window_size.width() - 50,
@@ -566,8 +570,9 @@ class ConfigMenu(QMenu):
 def enabledCallback(enabled: bool):
     global lastEnabled
     lastEnabled = enabled
-    TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(enabled, lastTBLight)))
-    TRAY_ICON.setToolTip(getTBDescription())
+    if "TRAY_ICON" in globals():
+        TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(enabled, lastTBLight)))
+        TRAY_ICON.setToolTip(getTBDescription())
 
 
 def protoCallback(proto: str):
@@ -656,12 +661,12 @@ CONFIG_WINDOW = ConfigWindow()
 # tray menu
 TRAY_MENU = TrayMenu()
 
-# config menu
-CONFIG_MENU = ConfigMenu("选择配置")
-
 # tray icon
 TRAY_ICON = TrayIcon(QIcon(_d.getTBIconPath(lastEnabled, lastTBLight)), APP)
 TRAY_ICON.setToolTip(getTBDescription())
 TRAY_ICON.setContextMenu(TRAY_MENU)
 TRAY_ICON.activated.connect(handleTrayClick)
 TRAY_ICON.show()
+
+# config menu
+CONFIG_MENU = ConfigMenu("选择配置")

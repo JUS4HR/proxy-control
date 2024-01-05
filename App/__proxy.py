@@ -1,23 +1,14 @@
+import sys
+
+if sys.platform != "win32":
+    raise NotImplementedError("Wrong platform for this module")
 import json
-import platform
 import re
 import threading
-import winreg
 from typing import Callable
 
-if platform.system() != "Windows":
-    raise NotImplementedError("Wrong platform for this module")
-
-from win32api import (
-    RegCloseKey,
-    RegNotifyChangeKeyValue,
-    RegOpenKeyEx,
-    RegQueryValueEx,
-    RegSetValueEx,
-)
-from win32con import HKEY_CURRENT_USER, KEY_ALL_ACCESS, KEY_NOTIFY, KEY_READ, KEY_WRITE
-
 from . import __log as _l
+from . import __reg as reg
 
 PROXY_ENTRY = rf"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 PROXY_ENABLED_ENTRY = "ProxyEnable"
@@ -26,12 +17,12 @@ PROXY_OVERRIDE_ENTRY = "ProxyOverride"
 
 PROXY_URL_REGEX = r"^(?:(?P<protocol>http|https|socks4|socks5)://)?(?P<host>[^:/]+)(?::(?P<port>\d+))?$"
 
-if platform.system() == "Windows":
+if sys.platform == "win32":
     PROXY_ALLOWED_PROTOS = ["http", "https", "socks4", "socks5"]
-elif platform.system() == "Linux":
+elif sys.platform == "linux":
     PROXY_ALLOWED_PROTOS = ["http", "https", "socks4", "socks5", "socks5h"]
 else:
-    raise NotImplementedError(f"unsupported platform {platform.system()}")
+    raise NotImplementedError(f"unsupported platform {sys.platform}")
 
 ProxyEnabledWatcherCallbackType = Callable[[bool], None]
 ProxyProtocolWatcherCallbackType = Callable[[str], None]
@@ -51,26 +42,24 @@ def _monitor_registry_changes() -> None:
     _l.info("started proxy watcher")
     if _key is None:
         return
-    _lastEnabled = winreg.QueryValueEx(_key, PROXY_ENABLED_ENTRY)[0]
-    _lastServer = winreg.QueryValueEx(_key, PROXY_SERVER_ENTRY)[0]
-    _lastOverride = winreg.QueryValueEx(_key, PROXY_OVERRIDE_ENTRY)[0]
+    _lastEnabled = _key.queryValue(PROXY_ENABLED_ENTRY)[1] != 0
+    _lastServer = _key.queryValue(PROXY_SERVER_ENTRY)[1]
+    _lastOverride = _key.queryValue(PROXY_OVERRIDE_ENTRY)[1]
     while True:
         if _key is None:
             return
-        RegNotifyChangeKeyValue(
-            _key, False, winreg.REG_NOTIFY_CHANGE_LAST_SET, None, False
-        )
+        _key.notifyChange()
         if _key is None:
             return
         _l.debug("proxy registry changed")
-        enabled = winreg.QueryValueEx(_key, PROXY_ENABLED_ENTRY)[0]
+        enabled = _key.queryValue(PROXY_ENABLED_ENTRY)[1] != 0
         if enabled != _lastEnabled:
             _l.debug(f"proxy switched to {enabled}")
             _lastEnabled = enabled
             threading.Thread(
                 target=enabledCallback, args=(enabled == 1,), daemon=True
             ).start()
-        server = str(winreg.QueryValueEx(_key, PROXY_SERVER_ENTRY)[0])
+        server = str(_key.queryValue(PROXY_SERVER_ENTRY)[1])
         if server != _lastServer:
             _l.debug(f"proxy server changed to {server}")
             _lastServer = server
@@ -78,7 +67,7 @@ def _monitor_registry_changes() -> None:
             threading.Thread(target=protoCallback, args=(proto,), daemon=True).start()
             threading.Thread(target=hostCallback, args=(host,), daemon=True).start()
             threading.Thread(target=portCallback, args=(port,), daemon=True).start()
-        override = str(winreg.QueryValueEx(_key, PROXY_OVERRIDE_ENTRY)[0])
+        override = str(_key.queryValue(PROXY_OVERRIDE_ENTRY)[1])
         if override != _lastOverride:
             _l.debug(f"proxy override changed to {override}")
             _lastOverride = override
@@ -146,10 +135,15 @@ class ProxyConfig:
         return ";".join(self.noProxyies)
 
     def apply(self) -> None:
-        key = RegOpenKeyEx(HKEY_CURRENT_USER, PROXY_ENTRY, 0, KEY_ALL_ACCESS)
-        RegSetValueEx(key, PROXY_SERVER_ENTRY, 0, 1, self.url)
-        RegSetValueEx(key, PROXY_OVERRIDE_ENTRY, 0, 1, self.noProxyiesString)
-        RegCloseKey(key)
+        with reg.RegKey(
+            reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+            PROXY_ENTRY,
+            reg.RegKeyAccess.KEY_WRITE,
+        ) as key:
+            key.setValue(PROXY_SERVER_ENTRY, self.url, reg.RegValueType.REG_SZ)
+            key.setValue(
+                PROXY_OVERRIDE_ENTRY, self.noProxyiesString, reg.RegValueType.REG_SZ
+            )
         _l.info(f"applied proxy config {self} to registry")
 
     def __str__(self) -> str:
@@ -179,11 +173,13 @@ def getFromJson(json: dict) -> ProxyConfig:
 
 
 def getCurrentProxy() -> ProxyConfig:
-    key = RegOpenKeyEx(HKEY_CURRENT_USER, PROXY_ENTRY, 0, KEY_READ)
-    proxyServer = RegQueryValueEx(key, PROXY_SERVER_ENTRY)[0]
-    proxyOverride = RegQueryValueEx(key, PROXY_OVERRIDE_ENTRY)[0]
-    RegCloseKey(key)
-
+    with reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        PROXY_ENTRY,
+        reg.RegKeyAccess.KEY_READ,
+    ) as key:
+        proxyServer = str(key.queryValue(PROXY_SERVER_ENTRY)[1])
+        proxyOverride = str(key.queryValue(PROXY_OVERRIDE_ENTRY)[1])
     proto, host, port = splitURL(proxyServer)
     noProxyies = proxyOverride.split(";")
     ret = ProxyConfig(proto, host, port, noProxyies)
@@ -192,25 +188,35 @@ def getCurrentProxy() -> ProxyConfig:
 
 
 def getEnabled() -> bool:
-    key = RegOpenKeyEx(HKEY_CURRENT_USER, PROXY_ENTRY, 0, KEY_READ)
-    proxyEnabled = RegQueryValueEx(key, PROXY_ENABLED_ENTRY)[0]
-    RegCloseKey(key)
-    ret = proxyEnabled == 1
+    with reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        PROXY_ENTRY,
+        reg.RegKeyAccess.KEY_READ,
+    ) as key:
+        ret = key.queryValue(PROXY_ENABLED_ENTRY)[1] != 0
     _l.debug(f"loaded status {ret} from registry")
     return ret
 
 
 def setEnabled(enabled: bool) -> None:
-    key = RegOpenKeyEx(HKEY_CURRENT_USER, PROXY_ENTRY, 0, KEY_WRITE)
-    RegSetValueEx(key, PROXY_ENABLED_ENTRY, 0, 4, int(enabled))
-    RegCloseKey(key)
+    with reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        PROXY_ENTRY,
+        reg.RegKeyAccess.KEY_WRITE,
+    ) as key:
+        key.setValue(PROXY_ENABLED_ENTRY, 1 if enabled else 0, reg.RegValueType.REG_DWORD)
     _l.info(f"set proxy status to {enabled}")
 
 
 def start() -> None:
     global _thread, _key
     _l.info("starting proxy watcher...")
-    _key = winreg.OpenKey(HKEY_CURRENT_USER, PROXY_ENTRY, 0, KEY_READ | KEY_NOTIFY)
+    _key = reg.RegKey(
+        reg.getHKey(reg.RegKeyRoot.HKEY_CURRENT_USER),
+        PROXY_ENTRY,
+        reg.RegKeyAccess.KEY_NOTIFY | reg.RegKeyAccess.KEY_READ,
+    )
+    _key.open()
     _thread = threading.Thread(target=_monitor_registry_changes)
     _thread.daemon = True
     _thread.start()
@@ -220,14 +226,14 @@ def stop() -> None:
     global _key
     _l.info("stopping proxy watcher...")
     if _key is not None:
-        winreg.CloseKey(_key)
+        _key.close()
         _key = None
     if _thread:
         _thread.join()
 
 
 _thread: threading.Thread | None = None
-_key: winreg.HKEYType | None = None
+_key: reg.RegKey | None = None
 enabledCallback: ProxyEnabledWatcherCallbackType = lambda _: None
 protoCallback: ProxyProtocolWatcherCallbackType = lambda _: None
 hostCallback: ProxyHostWatcherCallbackType = lambda _: None
