@@ -2,40 +2,52 @@ import sys
 
 if sys.platform != "win32":
     raise NotImplementedError("Wrong platform for this module")
-import json
+import abc
 import re
 import threading
-from typing import Callable
+from typing import Callable, Literal
+
+from pydantic import BaseModel, Field
 
 from . import __log as _l
 from . import __reg as reg
+from . import __utils as _u
 
 PROXY_ENTRY = rf"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 PROXY_ENABLED_ENTRY = "ProxyEnable"
 PROXY_SERVER_ENTRY = "ProxyServer"
 PROXY_OVERRIDE_ENTRY = "ProxyOverride"
 
-PROXY_URL_REGEX = r"^(?:(?P<protocol>http|https|socks4|socks5)://)?(?P<host>[^:/]+)(?::(?P<port>\d+))?$"
+PROXY_URL_REGEX = re.compile(
+    "^(?:(?P<protocol>http|https|socks4|socks5)://)?(?P<host>[^:/]+)(?::(?P<port>\d+))?$"
+)
 
 if sys.platform == "win32":
-    PROXY_ALLOWED_PROTOS = ["http", "https", "socks4", "socks5"]
+    ProxyProto = Literal["http", "https", "socks4", "socks5"]
+    PROXY_ALLOWED_PROTOS: list[ProxyProto] = ["http", "https", "socks4", "socks5"]
+    DEFUALT_NO_PROXY = ["localhost", "192.168.x.x", "<local>"]
 elif sys.platform == "linux":
+    ProxyProto = Literal["http", "https", "socks4", "socks5", "socks5h"]
     PROXY_ALLOWED_PROTOS = ["http", "https", "socks4", "socks5", "socks5h"]
+    DEFUALT_NO_PROXY = []  # TODO: find out the default no proxyies for linux
 else:
     raise NotImplementedError(f"unsupported platform {sys.platform}")
 
 ProxyEnabledWatcherCallbackType = Callable[[bool], None]
-ProxyProtocolWatcherCallbackType = Callable[[str], None]
+ProxyProtocolWatcherCallbackType = Callable[[ProxyProto], None]
+ProxyFollowGatewayWatcherCallbackType = Callable[[bool], None]
 ProxyHostWatcherCallbackType = Callable[[str], None]
 ProxyPortWatcherCallbackType = Callable[[int], None]
 ProxyNoProxyiesWatcherCallbackType = Callable[[list[str]], None]
 
 
-def splitURL(url: str) -> tuple[str, str, int]:
-    match = re.match(PROXY_URL_REGEX, url)
+def splitURL(url: str) -> tuple[ProxyProto, str, int]:
+    match = PROXY_URL_REGEX.match(url)
     if match is None:
         raise ValueError(f"invalid proxy url {url}")
-    return match.group("protocol"), match.group("host"), int(match.group("port"))
+    proto: ProxyProto = "http" if (mpr := f"{match.group('protocol')}".lower()) is None or mpr not in PROXY_ALLOWED_PROTOS else mpr  # type: ignore
+    port: int = 80 if (mpo := match.group("port")) is None else int(mpo)
+    return proto, f"{match.group('host')}", port
 
 
 def _monitor_registry_changes() -> None:
@@ -76,59 +88,42 @@ def _monitor_registry_changes() -> None:
             ).start()
 
 
-class ProxyConfigEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, ProxyConfig):
-            return obj.dict
-        return super().default(obj)
+class Network(BaseModel):
+    """To identify a network"""
+
+    mac: str | None = Field(None, description="Network MAC address")
+    ssid: str | None = Field(
+        None, description="Network SSID, None for wired connection"
+    )
+
+    class Config:
+        extra = "forbid"
+        # allow_mutation = False
+
+    def __hash__(self) -> int:
+        return hash((type(self),) + tuple(self.__dict__.values()))
+
+    def __repr__(self) -> str:
+        return f"{self.ssid or '有线连接'} ({self.mac or '任意网关MAC'})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
-class ProxyConfigDecoder(json.JSONDecoder):
-    def __init__(self, *args, **kwargs):
-        super().__init__(object_hook=self.object_hook, *args, **kwargs)
+class Proxy(BaseModel):
+    proto: ProxyProto = Field(PROXY_ALLOWED_PROTOS[0], description="Proxy protocol")
+    port: int = Field(..., description="Proxy port")
+    noProxyies: list[str] = Field(DEFUALT_NO_PROXY, description="No proxyies")
+    proxyType: Literal["SpecificProxy", "GatewayProxy"] = Field(
+        ..., description="Proxy type"
+    )
 
-    def object_hook(self, obj):
-        if (
-            "proto" in obj
-            and "host" in obj
-            and "port" in obj
-            and "noProxyies" in obj
-            and "ssids" in obj
-        ):
-            return ProxyConfig(
-                obj["proto"], obj["host"], obj["port"], obj["noProxyies"], obj["ssids"]
-            )
-        return obj
-
-
-class ProxyConfig:
-    def __init__(
-        self,
-        proto: str,
-        host: str,
-        port: int,
-        noProxyies: list[str] = [],
-        ssids: list[str] = [],
-    ) -> None:
-        self.proto = proto
-        self.host = host
-        self.port = port
-        self.noProxyies = noProxyies
-        self.ssids = ssids
+    class Config:
+        extra = "forbid"
 
     @property
-    def dict(self) -> dict:
-        return {
-            "proto": self.proto,
-            "host": self.host,
-            "port": self.port,
-            "noProxyies": self.noProxyies,
-            "ssids": self.ssids,
-        }
-
-    @property
-    def url(self) -> str:
-        return f"{self.proto}://{self.host}:{self.port}"
+    @abc.abstractmethod
+    def url(self) -> str: ...
 
     @property
     def noProxyiesString(self) -> str:
@@ -146,30 +141,30 @@ class ProxyConfig:
             )
         _l.info(f"applied proxy config {self} to registry")
 
-    def __str__(self) -> str:
-        return f"ProxyConfig(proto={self.proto}, host={self.host}, port={self.port}, noProxyies={self.noProxyies}, ssids={self.ssids})"
 
-    def __repr__(self) -> str:
-        return str(self)
+class SpecificProxy(Proxy):
+    host: str = Field(..., description="Proxy host")
+    proxyType: Literal["SpecificProxy"] = "SpecificProxy"
 
-    def __eq__(self, o: object) -> bool:
-        if not isinstance(o, ProxyConfig):
-            return False
-        return (
-            self.proto == o.proto
-            and self.host == o.host
-            and self.port == o.port
-            and self.noProxyies == o.noProxyies
-            and self.ssids == o.ssids
-        )
+    @property
+    def url(self) -> str:
+        return f"{self.proto}://{self.host}:{self.port}"
 
 
-def getFromJson(json: dict) -> ProxyConfig:
-    ret = ProxyConfig(
-        json["proto"], json["host"], json["port"], json["noProxyies"], json["ssids"]
+class GatewayProxy(Proxy):
+    proxyType: Literal["GatewayProxy"] = "GatewayProxy"
+
+    @property
+    def url(self) -> str:
+        return f"{self.proto}://{_u.getGateway()}:{self.port}"
+
+
+class ProxyConfig(BaseModel):
+    """Proxy configuration"""
+
+    proxy: SpecificProxy | GatewayProxy = Field(
+        ..., description="Proxy configuration", discriminator="proxyType"
     )
-    _l.debug(f"loaded {ret} from json")
-    return ret
 
 
 def getCurrentProxy() -> ProxyConfig:
@@ -182,7 +177,9 @@ def getCurrentProxy() -> ProxyConfig:
         proxyOverride = str(key.queryValue(PROXY_OVERRIDE_ENTRY)[1])
     proto, host, port = splitURL(proxyServer)
     noProxyies = proxyOverride.split(";")
-    ret = ProxyConfig(proto, host, port, noProxyies)
+    ret = ProxyConfig(
+        proxy=SpecificProxy(proto=proto, host=host, port=port, noProxyies=noProxyies)
+    )
     _l.debug(f"loaded {ret} from registry")
     return ret
 
@@ -204,7 +201,9 @@ def setEnabled(enabled: bool) -> None:
         PROXY_ENTRY,
         reg.RegKeyAccess.KEY_WRITE,
     ) as key:
-        key.setValue(PROXY_ENABLED_ENTRY, 1 if enabled else 0, reg.RegValueType.REG_DWORD)
+        key.setValue(
+            PROXY_ENABLED_ENTRY, 1 if enabled else 0, reg.RegValueType.REG_DWORD
+        )
     _l.info(f"set proxy status to {enabled}")
 
 
@@ -236,6 +235,7 @@ _thread: threading.Thread | None = None
 _key: reg.RegKey | None = None
 enabledCallback: ProxyEnabledWatcherCallbackType = lambda _: None
 protoCallback: ProxyProtocolWatcherCallbackType = lambda _: None
+followGatewayCallback: ProxyFollowGatewayWatcherCallbackType = lambda _: None
 hostCallback: ProxyHostWatcherCallbackType = lambda _: None
 portCallback: ProxyPortWatcherCallbackType = lambda _: None
 noProxyiesCallback: ProxyNoProxyiesWatcherCallbackType = lambda _: None

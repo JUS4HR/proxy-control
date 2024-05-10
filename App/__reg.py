@@ -1,7 +1,6 @@
 import sys
 from typing import Union
 
-
 if sys.platform != "win32":
     raise NotImplementedError("Wrong platform for this module")
 

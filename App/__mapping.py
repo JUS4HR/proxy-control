@@ -14,21 +14,29 @@ NULL_KEY_REPLACEMENT = "TlVMX0FTX0Y=\u0000"
 
 
 def _saveConfig() -> None:
-    replacedConfig = {
-        (NULL_KEY_REPLACEMENT if k is None else k): v for k, v in _config.items()
-    }
-    _c.setGeneral(AUTO_MAP_CONFIG_ENTRY, replacedConfig)
+    _c.setGeneral(
+        AUTO_MAP_CONFIG_ENTRY, {_c.nwInfoToText(k): v for k, v in _config.items()}
+    )
 
 
-def _loadConfig() -> dict[str | None, str | None]:
-    replacedConfig: dict[str, str | None] = _c.getGeneral(AUTO_MAP_CONFIG_ENTRY, {})
-    return {
-        k if k != NULL_KEY_REPLACEMENT else None: v for k, v in replacedConfig.items()
+def _loadConfig() -> dict[_p.Network, str | None]:
+    return {  # type: ignore
+        _c.textToNwInfo(k): v
+        for k, v in _c.getGeneral(AUTO_MAP_CONFIG_ENTRY, {}).items()
     }
+
+
+def _getNetworkInfo() -> _p.Network:
+    return _p.Network(
+        mac=(
+            _u.getMacAddr(gwip) or "" if (gwip := _u.getGateway()) is not None else ""
+        ),
+        ssid=_u.getSSID(),
+    )
 
 
 def _networkChangeDetection() -> None:
-    global _lastSSID
+    global _lastNetworkInfo
     while _active:
         if not _u.isConnected():
             while _active:
@@ -37,33 +45,51 @@ def _networkChangeDetection() -> None:
                 time.sleep(1)
             else:
                 return
-            ssid = _u.getSSID()
-            if ssid != _lastSSID:
+            if (nwInfo := _getNetworkInfo()) != _lastNetworkInfo:
                 applyMapping()
-                _lastSSID = ssid
+                _lastNetworkInfo = nwInfo
         time.sleep(1)
 
 
 @_d.debounce(2000)
 def applyMapping(force: bool = False) -> None:
-    global _lastSSID
+    global _lastNetworkInfo
     if force:
-        _lastSSID = _u.getSSID()
-    if _lastSSID in _config:  # assuming is connected
-        confName = _config[_lastSSID]
-        if confName is not None and confName in _c.proxyConfig:
-            _c.proxyConfig[confName].apply()
+        _lastNetworkInfo = _getNetworkInfo()
+    if _lastNetworkInfo is None:
+        _p.setEnabled(False)
+        _t.toast("无法获取网络信息，已禁用代理")
+        return
+    if _lastNetworkInfo in _config:  # assuming is connected
+        confName = _config[_lastNetworkInfo]
+        if confName in _c.proxyConfig:
+            _c.proxyConfig[confName].proxy.apply()
             _p.setEnabled(True)
-            _t.toast(f"根据网络 [{_lastSSID or '有线连接'}]，使用配置 [{confName}]")
+            _t.toast(
+                f"根据网络 [{_lastNetworkInfo or '有线连接'}]，使用配置 [{confName}]"
+            )
             return
         _p.setEnabled(False)
-        _t.toast(f"根据网络 [{_lastSSID or '有线连接'}]，已禁用代理")
+        _t.toast(f"根据网络 [{_lastNetworkInfo or '有线连接'}]，已禁用代理")
+        return
+    for info, confName in _config.items():
+        if info.mac is None and info.ssid == _lastNetworkInfo.ssid:
+            if confName in _c.proxyConfig:
+                _c.proxyConfig[confName].proxy.apply()
+                _p.setEnabled(True)
+                _t.toast(f"根据网络 [{info}]，使用配置 [{confName}]")
+                return
+            _p.setEnabled(False)
+            _t.toast(f"根据网络 [{info}]，已禁用代理")
+            return
+    _p.setEnabled(False)
+    _t.toast(f"未找到适用于网络 [{_lastNetworkInfo}] 的配置，已禁用代理")
 
 
 def _checkMapping() -> None:
-    for ssid, confName in _config.items():
+    for nwInfo, confName in _config.items():
         if confName is not None and confName not in _c.proxyConfig:
-            _config[ssid] = DEPRECATED_STR
+            _config[nwInfo] = DEPRECATED_STR
 
 
 def start(skipConf: bool = False) -> None:
@@ -88,27 +114,27 @@ def active() -> bool:
     return _active
 
 
-def config() -> dict[str | None, str | None]:
+def config() -> dict[_p.Network, str | None]:
     _checkMapping()
     return _config
 
 
-def addMapping(ssid: str | None, confName: str | None) -> None:
-    _config[ssid] = confName
+def addMapping(nwInfo: _p.Network, confName: str | None) -> None:
+    _config[nwInfo] = confName
     _saveConfig()
 
 
-def removeMapping(ssid: str | None) -> None:
-    _config.pop(ssid, None)
+def removeMapping(nwInfo: _p.Network) -> None:
+    _config.pop(nwInfo, None)
     _saveConfig()
 
 
 _active: bool = _c.getGeneral(AUTO_MAP_ENABLED_ENTRY, False)
-_lastSSID: str | None = _u.getSSID()
+_lastNetworkInfo: _p.Network | None = _getNetworkInfo()
 _thread: threading.Thread = threading.Thread(
     target=_networkChangeDetection, daemon=True
 )
-_config: dict[str | None, str | None] = _loadConfig()
+_config: dict[_p.Network, str | None] = _loadConfig()
 
 _checkMapping()
 if _active:

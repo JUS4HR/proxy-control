@@ -3,6 +3,7 @@ import sys
 import threading
 from . import __reg as reg
 from typing import Callable
+from pathlib import Path
 
 import __main__
 
@@ -68,7 +69,7 @@ def isWindowLight() -> bool:
         return key.queryValue(WINDOW_THEME_ENTRY)[1] == 1
 
 
-def getTBIconPath(intact: bool, light: bool | None = None) -> str:
+def getTBIconPath(intact: bool, light: bool | None = None) -> Path:
     path = _u.getBundledFilePath(
         os.path.join(
             ICON_PATH,

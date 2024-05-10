@@ -76,7 +76,7 @@ class ConfigWindow(QMainWindow):
         }
         self.tabs.currentChanged.connect(self.onCurrentChanged)
 
-        self.setFixedSize(330, 260)
+        self.setFixedSize(370, 260)
         self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
 
         self.pageUpdates[self.tabs.currentIndex()]()
@@ -87,7 +87,9 @@ class ConfigWindow(QMainWindow):
 
     def show(self) -> None:
         super().show()
-        self.setWindowIcon(QIcon(_d.getTBIconPath(lastEnabled, lastWindowLight)))
+        self.setWindowIcon(
+            QIcon(_d.getTBIconPath(lastEnabled, lastWindowLight).as_posix())
+        )
 
 
 # config page
@@ -98,7 +100,7 @@ class ConfigPage(QWidget):
         self.setLayout(self.rootLayout)
         # left list
         self.list = QListWidget(self)
-        self.list.setFixedWidth(200)
+        self.list.setFixedWidth(240)
         self.list.itemSelectionChanged.connect(self.onSelectionChanged)
         self.list.itemDoubleClicked.connect(self.editConfig)
         self.rootLayout.addWidget(self.list)
@@ -183,13 +185,13 @@ class MappingPage(QWidget):
         self.ssidLayout.setAlignment(getattr(Qt, "AlignTop"))
         self.ssidLabel = QLabel("网络")
         self.ssidLayout.addWidget(self.ssidLabel)
-        self.ssidList = QListWidget(self)
-        self.ssidList.setFixedWidth(150)
-        self.ssidList.currentRowChanged.connect(self.onSelSsid)
-        self.ssidList.verticalScrollBar().valueChanged.connect(self.onScrollSsid)
-        self.ssidList.setVerticalScrollBarPolicy(getattr(Qt, "ScrollBarAlwaysOff"))
-        self.ssidList.itemDoubleClicked.connect(self.editMapping)
-        self.ssidLayout.addWidget(self.ssidList)
+        self.nwInfoList = QListWidget(self)
+        self.nwInfoList.setFixedWidth(220)
+        self.nwInfoList.currentRowChanged.connect(self.onSelSsid)
+        self.nwInfoList.verticalScrollBar().valueChanged.connect(self.onScrollSsid)
+        self.nwInfoList.setVerticalScrollBarPolicy(getattr(Qt, "ScrollBarAlwaysOff"))
+        self.nwInfoList.itemDoubleClicked.connect(self.editMapping)
+        self.ssidLayout.addWidget(self.nwInfoList)
         self.tableLayout.addLayout(self.ssidLayout)
 
         self.configLayout = QVBoxLayout()
@@ -197,7 +199,7 @@ class MappingPage(QWidget):
         self.configLabel = QLabel("配置")
         self.configLayout.addWidget(self.configLabel)
         self.configList = QListWidget(self)
-        self.configList.setFixedWidth(150)
+        self.configList.setFixedWidth(120)
         self.configList.currentRowChanged.connect(self.onSelConfig)
         self.configList.verticalScrollBar().valueChanged.connect(self.onScrollConfig)
         self.configList.itemDoubleClicked.connect(self.editMapping)
@@ -212,19 +214,19 @@ class MappingPage(QWidget):
         self.buttonsLayout.addWidget(self.appendBtn)
         self.editBtn = QPushButton("编辑")
         self.editBtn.clicked.connect(self.editMapping)
-        self.editBtn.setEnabled(len(self.ssidList.selectedIndexes()) > 0)
+        self.editBtn.setEnabled(len(self.nwInfoList.selectedIndexes()) > 0)
         self.buttonsLayout.addWidget(self.editBtn)
         self.removeBtn = QPushButton("删除")
         self.removeBtn.clicked.connect(self.removeMapping)
-        self.removeBtn.setEnabled(len(self.ssidList.selectedIndexes()) > 0)
+        self.removeBtn.setEnabled(len(self.nwInfoList.selectedIndexes()) > 0)
         self.buttonsLayout.addWidget(self.removeBtn)
 
     def updateTable(self) -> None:
-        self.ssidList.clear()
+        self.nwInfoList.clear()
         self.configList.clear()
-        for ssid, config in _m.config().items():
-            _l.debug(f"Adding mapping {ssid} -> {config}")
-            self.ssidList.addItem(ssid or MAPPING_SSID_WIRED_KW)
+        for nwInfo, config in _m.config().items():
+            _l.debug(f"Adding mapping {nwInfo} -> {config}")
+            self.nwInfoList.addItem(_c.nwInfoToText(nwInfo))
             self.configList.addItem(config or MAPPING_UNSET_KW)
 
     def onSelSsid(self, index: int) -> None:
@@ -233,13 +235,13 @@ class MappingPage(QWidget):
         self.removeBtn.setEnabled(index >= 0)
 
     def onSelConfig(self, index: int) -> None:
-        self.ssidList.setCurrentRow(index)
+        self.nwInfoList.setCurrentRow(index)
 
     def onScrollSsid(self, value: int) -> None:
         self.configList.verticalScrollBar().setValue(value)
 
     def onScrollConfig(self, value: int) -> None:
-        self.ssidList.verticalScrollBar().setValue(value)
+        self.nwInfoList.verticalScrollBar().setValue(value)
 
     def newMapping(self) -> None:
         editWindow = MappingEditWindow(new=True)
@@ -251,13 +253,13 @@ class MappingPage(QWidget):
         self.editWindow = editWindow
 
     def editMapping(self) -> None:
-        ssid: str | None = self.ssidList.currentItem().text()
-        if ssid == MAPPING_SSID_WIRED_KW:
-            ssid = None
+        nwInfo: _p.Network | None = _c.textToNwInfo(
+            self.nwInfoList.currentItem().text()
+        )
         config: str | None = self.configList.currentItem().text()
         if config == MAPPING_UNSET_KW:
             config = None
-        editWindow = MappingEditWindow(new=False, oldSsid=ssid, oldConfig=config)
+        editWindow = MappingEditWindow(new=False, oldNWInfo=nwInfo, oldConfig=config)
         editWindow.accepted.connect(self.updateTable)
         editWindow.move(
             self.mapToGlobal(self.rect().center() - editWindow.rect().center())
@@ -266,7 +268,7 @@ class MappingPage(QWidget):
         self.editWindow = editWindow
 
     def removeMapping(self) -> None:
-        selIndexes = self.ssidList.selectedIndexes()
+        selIndexes = self.nwInfoList.selectedIndexes()
         if not selIndexes:
             _l.warning("No mapping selected")
             return
@@ -276,9 +278,9 @@ class MappingPage(QWidget):
         if confirm == QMessageBox.Yes:
             for i in selIndexes:
                 item = i.data()
-                if item == MAPPING_SSID_WIRED_KW:
-                    item = None
-                _m.removeMapping(item)
+                # if item == MAPPING_SSID_WIRED_KW:
+                #     item = None
+                _m.removeMapping(_c.textToNwInfo(item))
                 _l.info(f"Removed mapping {item}")
             self.updateTable()
 
@@ -296,7 +298,9 @@ class OptionsPage(QWidget):
         self.autoSelectBtn = QCheckBox("根据当前网络自动选择配置")
         self.autoSelectBtn.clicked.connect(self.switchAutoSelect)
         self.rootLayout.addWidget(self.autoSelectBtn)
-        self.autoSelectHint = QLabel("此功能现可能占用系统资源。若禁用此项，可在托盘菜单中手动映射")
+        self.autoSelectHint = QLabel(
+            "此功能现可能占用系统资源。若禁用此项，可在托盘菜单中手动映射"
+        )
         self.autoSelectHint.setWordWrap(True)
         self.rootLayout.addWidget(self.autoSelectHint)
 
@@ -336,7 +340,11 @@ class ConfigEditWindow(QDialog):
         self.config = (
             config
             or _p.getCurrentProxy()
-            or _p.ProxyConfig(_p.PROXY_ALLOWED_PROTOS[0], "", 80)
+            or _p.ProxyConfig(
+                proxy=_p.SpecificProxy(
+                    proto=_p.PROXY_ALLOWED_PROTOS[0], port=80, noProxyies=[], host=""
+                )
+            )
         )
         self.rootLayout = QVBoxLayout(self)
         self.setLayout(self.rootLayout)
@@ -347,6 +355,8 @@ class ConfigEditWindow(QDialog):
         self.proto = QComboBox()
         self.proto.addItems(_p.PROXY_ALLOWED_PROTOS)
         self.form.addRow("协议", self.proto)
+        self.followGateway = QCheckBox("跟随网关")
+        self.form.addRow(self.followGateway)
         self.host = QLineEdit()
         self.form.addRow("主机", self.host)
         self.port = QLineEdit()
@@ -369,15 +379,28 @@ class ConfigEditWindow(QDialog):
         self.btnLayout.addWidget(self.cancelBtn)
 
         self.name.setText(name)
-        self.proto.setCurrentText(self.config.proto)
-        self.host.setText(self.config.host)
-        self.port.setText(str(self.config.port))
+        self.proto.setCurrentText(self.config.proxy.proto)
+        self.host.setText(
+            ""
+            if (followGatewayB := self.config.proxy.proxyType == "GatewayProxy")
+            else self.config.proxy.host
+        )
+        self.host.setDisabled(followGatewayB)
+        self.followGateway.setChecked(followGatewayB)
+        self.port.setText(str(self.config.proxy.port))
         # self.username.setText(self.config.username)
         # self.password.setText(self.config.password)
         # self.auth.setChecked(self.config.auth)
 
+        def onFGWSwitch(s: bool):
+            self.host.setDisabled(s)
+            if not s:
+                self.host.setFocus()
+
+        self.followGateway.stateChanged.connect(onFGWSwitch)
+
         self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
-        self.setFixedSize(QSize(250, 150))
+        self.setFixedSize(QSize(250, 200))
 
     def apply(self) -> None:
         if not _c.checkConfigName(self.name.text()):
@@ -388,9 +411,16 @@ class ConfigEditWindow(QDialog):
         ):
             QMessageBox.warning(self, "错误", "名称已存在")
             return
-        self.config.proto = self.proto.currentText()
-        self.config.host = self.host.text()
-        self.config.port = int(self.port.text())
+        if (pt := self.proto.currentText()) in _p.PROXY_ALLOWED_PROTOS:
+            protoText: _p.ProxyProto = pt  # type: ignore
+        else:
+            protoText = _p.PROXY_ALLOWED_PROTOS[0]
+        if self.followGateway.isChecked():
+            self.config.proxy = _p.GatewayProxy(
+                proto=protoText,
+                port=int(self.port.text()),
+                noProxyies=[],
+            )
         # self.config.username = self.username.text()
         # self.config.password = self.password.text()
         # self.config.auth = self.auth.isChecked()
@@ -406,7 +436,7 @@ class MappingEditWindow(QDialog):
     def __init__(
         self,
         new: bool = False,
-        oldSsid: str | None = None,
+        oldNWInfo: _p.Network | None = None,
         oldConfig: str | None = None,
         *args,
         **kwargs,
@@ -415,24 +445,37 @@ class MappingEditWindow(QDialog):
         self.new = new
         self.setWindowTitle("新映射" if new else "编辑映射")
         if new:
-            currSsid = _u.getSSID()
-            self.oldSsid = None if currSsid in _m.config() else currSsid
+            curNWInfo = _p.Network(
+                mac=_u.getGwMac(),
+                ssid=_u.getSSID(),
+            )
+            self.oldNWInfo = None if curNWInfo in _m.config() else curNWInfo
         else:
-            self.oldSsid = oldSsid
-        _l.debug(f"oldSsid: {self.oldSsid}")
+            self.oldNWInfo = oldNWInfo
+        _l.debug(f"oldNWInfo: {self.oldNWInfo}")
         self.oldConfig = oldConfig
         self.rootLayout = QVBoxLayout(self)
         self.setLayout(self.rootLayout)
         self.form = QFormLayout()
         self.rootLayout.addLayout(self.form)
         self.ssid = QLineEdit()
-        self.ssid.setText(self.oldSsid or "")
+        self.ssid.setText("" if self.oldNWInfo is None else self.oldNWInfo.ssid or "")
         self.ssid.setPlaceholderText("留空则为有线网络")
         self.form.addRow("SSID", self.ssid)
+        self.macaddr = QLineEdit()
+        self.macaddr.setText("" if self.oldNWInfo is None else self.oldNWInfo.mac or "")
+        self.macaddr.setPlaceholderText("留空则不区分网关MAC")
+        self.form.addRow("网关MAC", self.macaddr)
         self.config = QComboBox()
         self.config.addItems(list(_c.proxyConfig.keys()) + [MAPPING_UNSET_KW])
         self.config.setCurrentText(self.oldConfig or MAPPING_UNSET_KW)
         self.form.addRow("配置", self.config)
+        self.setRow = QHBoxLayout()
+        self.useCurrSsid = QPushButton("使用当前SSID")
+        self.setRow.addWidget(self.useCurrSsid)
+        self.useCurrMac = QPushButton("使用当前MAC")
+        self.setRow.addWidget(self.useCurrMac)
+        self.form.addRow(self.setRow)
         self.btnLayout = QHBoxLayout()
         self.btnLayout.setAlignment(getattr(Qt, "AlignRight"))
         self.rootLayout.addLayout(self.btnLayout)
@@ -444,20 +487,29 @@ class MappingEditWindow(QDialog):
         self.btnLayout.addWidget(self.cancelBtn)
         self.config.setCurrentText(oldConfig or "")
 
+        self.useCurrSsid.clicked.connect(lambda: self.ssid.setText(_u.getSSID() or ""))
+        self.useCurrMac.clicked.connect(
+            lambda: self.macaddr.setText(_u.getGwMac() or "")
+        )
+
         self.setWindowFlag(getattr(Qt, "WindowContextHelpButtonHint"), False)
-        self.setFixedSize(QSize(250, 120))
+        self.setFixedSize(QSize(250, 160))
+        self.saveBtn.setFocus()
 
     def apply(self) -> None:
-        ssid: str | None = self.ssid.text()
-        if ssid == "":
-            ssid = None
-        if self.new and ssid in _m.config():
+        nwInfo = _p.Network(
+            mac=_u.macAddrValidate(self.macaddr.text() or None),
+            ssid=self.ssid.text() or None,
+        )
+        if self.new and nwInfo in _m.config():
             QMessageBox.warning(self, "错误", "SSID已存在")
             return
         config: str | None = self.config.currentText()
         if config == MAPPING_UNSET_KW:
             config = None
-        _m.addMapping(ssid, config)
+        if self.oldNWInfo and not self.new:
+            _m.removeMapping(self.oldNWInfo)
+        _m.addMapping(nwInfo, config)
         self.accept()
 
 
@@ -475,7 +527,7 @@ def getTBDescription() -> str:
             f"状态: " + ("\u2713" if lastEnabled else "\u2717"),
             f"配置: {lastConfigKey}",
             f"协议: {lastProto}",
-            f"主机: {lastHost}",
+            f"主机: {lastHost}" if lastFollowGateway else "跟随网关",
             f"端口: {lastPort}",
         ]
     )
@@ -571,13 +623,19 @@ def enabledCallback(enabled: bool):
     global lastEnabled
     lastEnabled = enabled
     if "TRAY_ICON" in globals():
-        TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(enabled, lastTBLight)))
+        TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(enabled, lastTBLight).as_posix()))
         TRAY_ICON.setToolTip(getTBDescription())
 
 
-def protoCallback(proto: str):
+def protoCallback(proto: _p.ProxyProto):
     global lastProto
     lastProto = proto
+    TRAY_ICON.setToolTip(getTBDescription())
+
+
+def followGatewayCallback(followGateway: bool):
+    global lastFollowGateway
+    lastFollowGateway = followGateway
     TRAY_ICON.setToolTip(getTBDescription())
 
 
@@ -613,13 +671,14 @@ def windowThemeCallback(light: bool):
 
 def tbThemeCallback(light: bool):
     global lastTBLight
-    TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(lastEnabled, light)))
+    TRAY_ICON.setIcon(QIcon(_d.getTBIconPath(lastEnabled, light).as_posix()))
     lastTBLight = light
 
 
 ### init
 _p.enabledCallback = enabledCallback
 _p.protoCallback = protoCallback
+_p.followGatewayCallback = followGatewayCallback
 _p.hostCallback = hostCallback
 _p.portCallback = portCallback
 _p.noProxyiesCallback = noProxyCallback
@@ -633,10 +692,11 @@ _d.start()
 lastEnabled = _p.getEnabled()
 lastConfigKey = _c.activeProxyKey
 lastConfig = _p.getCurrentProxy()
-lastProto = lastConfig.proto
-lastHost = lastConfig.host
-lastPort = lastConfig.port
-lastNoProxy = lastConfig.noProxyies
+lastProto = lastConfig.proxy.proto
+lastFollowGateway = isinstance(lastConfig.proxy, _p.GatewayProxy)
+lastHost = "" if lastFollowGateway else lastConfig.proxy.host  # type: ignore
+lastPort = lastConfig.proxy.port
+lastNoProxy = lastConfig.proxy.noProxyies
 lastWindowLight = _d.isWindowLight()
 lastTBLight = _d.isTBLight()
 
@@ -662,7 +722,7 @@ CONFIG_WINDOW = ConfigWindow()
 TRAY_MENU = TrayMenu()
 
 # tray icon
-TRAY_ICON = TrayIcon(QIcon(_d.getTBIconPath(lastEnabled, lastTBLight)), APP)
+TRAY_ICON = TrayIcon(QIcon(_d.getTBIconPath(lastEnabled, lastTBLight).as_posix()), APP)
 TRAY_ICON.setToolTip(getTBDescription())
 TRAY_ICON.setContextMenu(TRAY_MENU)
 TRAY_ICON.activated.connect(handleTrayClick)
