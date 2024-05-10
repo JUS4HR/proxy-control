@@ -419,7 +419,7 @@ class ConfigEditWindow(QDialog):
             self.config.proxy = _p.GatewayProxy(
                 proto=protoText,
                 port=int(self.port.text()),
-                noProxyies=[],
+                noProxyies=_p.DEFUALT_NO_PROXY,
             )
         # self.config.username = self.username.text()
         # self.config.password = self.password.text()
