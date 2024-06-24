@@ -23,7 +23,7 @@ MAC_ADDR_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")
 
 if IS_FROZEN:
     # running as a bundled executable
-    START_COMMAND = Path(sys.executable).resolve().as_posix()
+    START_COMMAND = Path(sys.executable).resolve().__str__()
 else:
     # running as a Python script
     if "CONDA_DEFAULT_ENV" in os.environ:
