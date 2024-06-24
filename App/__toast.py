@@ -4,7 +4,7 @@ from . import __utils as _u
 
 
 def toast(message: str, long: bool = False):
-    _text.text_fields.append(message)
+    _text.text_fields = [message]
     _text.duration =(ToastDuration.Long if long else ToastDuration.Short)
     _toaster.show_toast(_text)
 
