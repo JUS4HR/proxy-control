@@ -1,5 +1,6 @@
 PyQt5
-pyqtdarktheme
+pyqtdarktheme>=2.0.0
 windows-toasts
 pyinstaller
 pydantic
+chardet

@@ -7,6 +7,7 @@ import locale
 import os
 import subprocess
 from pathlib import Path
+import chardet
 
 import __main__
 
@@ -50,7 +51,9 @@ def getSSID() -> str | None:
         bytes = subprocess.check_output(
             ["netsh", "wlan", "show", "interfaces"], startupinfo=SUBPROCESS_SILENT_INFO
         )
-        output = bytes.decode(locale.getdefaultlocale()[1] or "utf-8")
+        detected_encoding = chardet.detect(bytes)['encoding']
+        encoding = detected_encoding or locale.getdefaultlocale()[1] or "utf-8"
+        output = bytes.decode(encoding)
         lines = output.split("\n")
         for line in lines:
             if line.strip().startswith("SSID"):
