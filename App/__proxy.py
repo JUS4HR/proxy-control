@@ -29,7 +29,7 @@ if sys.platform == "win32":
 elif sys.platform == "linux":
     ProxyProto = Literal["http", "https", "socks4", "socks5", "socks5h"]
     PROXY_ALLOWED_PROTOS = ["http", "https", "socks4", "socks5", "socks5h"]
-    DEFUALT_NO_PROXY = []  # TODO: find out the default no proxyies for linux
+    DEFUALT_NO_PROXY = ["localhost", "127.0.0.1", "::1", ".local"]
 else:
     raise NotImplementedError(f"unsupported platform {sys.platform}")
 
